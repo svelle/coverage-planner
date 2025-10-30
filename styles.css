@@ -330,12 +330,19 @@ select {
 }
 
 input[type="text"],
-input[type="time"] {
+input[type="time"],
+textarea {
     padding: 8px 12px;
     border: 1px solid #ddd;
     border-radius: 6px;
     font-size: 0.95rem;
     width: 100%;
+    font-family: 'Courier New', monospace;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 100px;
 }
 
 /* Modal */
@@ -1052,4 +1059,12 @@ input[type="time"] {
     align-items: center;
     margin-bottom: 15px;
     gap: 10px;
+}
+
+/* Share modal styles */
+.share-instructions {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: #666;
+    line-height: 1.5;
 }

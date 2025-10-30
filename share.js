@@ -1,7 +1,27 @@
-// URL-based sharing functionality using compressed hashes
+// Share functionality using compressed hashes in a modal
 
-// Generate a shareable URL with compressed data
-function generateShareUrl() {
+// Open the share modal
+function openShareModal() {
+    const modal = document.getElementById('shareModal');
+    const textarea = document.getElementById('shareHashInput');
+
+    // Generate the hash
+    const hash = generateShareHash();
+
+    if (hash) {
+        // Populate the textarea with the hash
+        textarea.value = hash;
+
+        // Show the modal
+        modal.classList.add('show');
+
+        // Auto-select the text for easy copying
+        textarea.select();
+    }
+}
+
+// Generate a shareable hash with compressed data
+function generateShareHash() {
     try {
         // Get all data to share
         const data = exportData();
@@ -12,41 +32,45 @@ function generateShareUrl() {
         // Compress the JSON using lz-string
         const compressed = LZString.compressToEncodedURIComponent(jsonString);
 
-        // Generate the share URL
-        const shareUrl = `${window.location.origin}${window.location.pathname}#s=${compressed}`;
-
-        // Copy to clipboard
-        navigator.clipboard.writeText(shareUrl).then(() => {
-            showShareNotification('Link copied to clipboard! 📋');
-        }).catch(err => {
-            // Fallback if clipboard API fails
-            console.error('Failed to copy to clipboard:', err);
-            showShareNotification('Failed to copy link. Please copy manually: ' + shareUrl, true);
-        });
+        return compressed;
     } catch (error) {
-        console.error('Error generating share URL:', error);
-        alert('Failed to generate share link. Please try again.');
+        console.error('Error generating share hash:', error);
+        alert('Failed to generate share hash. Please try again.');
+        return null;
     }
 }
 
-// Load data from URL hash on page load
-function loadFromUrl() {
+// Copy the hash to clipboard
+function copyShareHash() {
+    const textarea = document.getElementById('shareHashInput');
+
+    textarea.select();
+
+    navigator.clipboard.writeText(textarea.value).then(() => {
+        showShareNotification('Hash copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
+        // Fallback: the text is already selected, user can manually copy
+        showShareNotification('Please press Ctrl+C (or Cmd+C) to copy', true);
+    });
+}
+
+// Load data from the pasted hash
+function loadFromHash() {
+    const textarea = document.getElementById('shareHashInput');
+    const hash = textarea.value.trim();
+
+    if (!hash) {
+        alert('Please paste a share hash first.');
+        return;
+    }
+
     try {
-        // Check if URL has a share hash
-        const hash = window.location.hash;
-        if (!hash.startsWith('#s=')) {
-            return; // No share data in URL
-        }
-
-        // Extract compressed data
-        const compressed = hash.substring(3); // Remove '#s='
-
         // Decompress the data
-        const jsonString = LZString.decompressFromEncodedURIComponent(compressed);
+        const jsonString = LZString.decompressFromEncodedURIComponent(hash);
 
         if (!jsonString) {
-            console.error('Failed to decompress URL data');
-            alert('Invalid share link. The data could not be loaded.');
+            alert('Invalid share hash. The data could not be loaded.');
             return;
         }
 
@@ -57,9 +81,6 @@ function loadFromUrl() {
         const result = importData(data);
 
         if (result.success) {
-            // Clear the hash from URL to clean up address bar
-            history.replaceState(null, '', window.location.pathname + window.location.search);
-
             // Reload the data in the UI
             engineers = loadEngineers();
             scheduleTypes = loadScheduleTypes();
@@ -73,14 +94,23 @@ function loadFromUrl() {
             renderHeatmap();
             renderBarChart();
 
-            showShareNotification('Coverage plan loaded successfully! ✓');
+            // Close the modal
+            closeShareModal();
+
+            showShareNotification('Coverage plan loaded successfully!');
         } else {
             alert('Failed to load shared data: ' + result.error);
         }
     } catch (error) {
-        console.error('Error loading from URL:', error);
-        alert('Failed to load shared coverage plan. The link may be invalid or corrupted.');
+        console.error('Error loading from hash:', error);
+        alert('Failed to load coverage plan. The hash may be invalid or corrupted.');
     }
+}
+
+// Close the share modal
+function closeShareModal() {
+    const modal = document.getElementById('shareModal');
+    modal.classList.remove('show');
 }
 
 // Show a temporary notification message

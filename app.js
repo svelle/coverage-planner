@@ -36,9 +36,6 @@ function init() {
     // Initialize bar chart (default to Monday)
     document.getElementById('barChartDaySelect').value = '1';
     renderBarChart();
-
-    // Load data from URL if shared link
-    loadFromUrl();
 }
 
 // Set up all event listeners
@@ -96,7 +93,13 @@ function setupEventListeners() {
     document.getElementById('exportJsonBtn').addEventListener('click', handleExportJson);
     document.getElementById('exportCsvBtn').addEventListener('click', handleExportCsv);
     document.getElementById('importJsonInput').addEventListener('change', handleImportJson);
-    document.getElementById('shareBtn').addEventListener('click', generateShareUrl);
+
+    // Share modal buttons
+    document.getElementById('shareBtn').addEventListener('click', openShareModal);
+    document.querySelector('.share-modal-close').addEventListener('click', closeShareModal);
+    document.getElementById('copyHashBtn').addEventListener('click', copyShareHash);
+    document.getElementById('loadHashBtn').addEventListener('click', loadFromHash);
+    document.getElementById('closeShareBtn').addEventListener('click', closeShareModal);
 
     // Collapse buttons
     document.getElementById('collapseGroupsBtn').addEventListener('click', () => toggleCollapse('groups'));

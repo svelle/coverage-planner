@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coverage Planner - Team Timezone Coverage</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Team Coverage Planner</h1>
+            <p>Plan and visualize technical support coverage across timezones</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Left Sidebar -->
+            <aside class="sidebar">
+                <!-- Groups Section -->
+                <section class="groups-section">
+                    <div class="section-header">
+                        <div class="section-header-left">
+                            <button class="collapse-btn" id="collapseGroupsBtn" aria-label="Collapse Groups">▼</button>
+                            <h2>Groups</h2>
+                        </div>
+                        <button id="addGroupBtn" class="btn btn-primary btn-sm">+</button>
+                    </div>
+                    <div class="collapsible-content" id="groupsContent">
+                        <div class="group-filter">
+                            <button id="filterAllGroups" class="group-filter-btn active">All</button>
+                        </div>
+                        <div id="groupsList" class="groups-list">
+                            <!-- Groups will be dynamically added here -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Engineers Section -->
+                <section class="engineers-section">
+                    <div class="section-header">
+                        <div class="section-header-left">
+                            <button class="collapse-btn" id="collapseEngineersBtn" aria-label="Collapse Engineers">▼</button>
+                            <h2>Engineers</h2>
+                        </div>
+                        <button id="addEngineerBtn" class="btn btn-primary btn-sm">+</button>
+                    </div>
+                    <div class="collapsible-content" id="engineersContent">
+                        <div id="engineersList" class="engineers-list">
+                            <!-- Engineers will be dynamically added here -->
+                        </div>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- Heatmap Section -->
+            <section class="heatmap-section">
+                <div class="section-header">
+                    <h2>Coverage Heatmap</h2>
+                    <div class="controls">
+                        <label for="timezoneSelect">Timezone:</label>
+                        <select id="timezoneSelect">
+                            <!-- Populated dynamically -->
+                        </select>
+                        <label for="scheduleTypeSelect">Schedule:</label>
+                        <select id="scheduleTypeSelect">
+                            <option value="all">All Types</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                        <button type="button" id="manageScheduleTypesMainBtn" class="btn btn-secondary btn-sm" title="Manage Schedule Types">⚙️ Manage</button>
+                        <div class="export-buttons">
+                            <button id="exportJsonBtn" class="btn btn-secondary btn-sm">Export JSON</button>
+                            <button id="exportCsvBtn" class="btn btn-secondary btn-sm">Export CSV</button>
+                            <label for="importJsonInput" class="btn btn-secondary btn-sm">Import
+                                <input type="file" id="importJsonInput" accept=".json" style="display: none;">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div id="heatmapContainer" class="heatmap-container">
+                    <!-- Heatmap will be rendered here -->
+                </div>
+                <div class="legend">
+                    <span class="legend-label">Coverage:</span>
+                    <div class="legend-item"><span class="legend-color" style="background-color: #f0f0f0;"></span> 0</div>
+                    <div class="legend-item"><span class="legend-color" style="background-color: #c6e8c6;"></span> 1-2</div>
+                    <div class="legend-item"><span class="legend-color" style="background-color: #7bc87b;"></span> 3-4</div>
+                    <div class="legend-item"><span class="legend-color" style="background-color: #4caf50;"></span> 5-6</div>
+                    <div class="legend-item"><span class="legend-color" style="background-color: #2e7d32;"></span> 7+</div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Modal for adding/editing engineer -->
+    <div id="engineerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Add Engineer</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="engineerName">Name:</label>
+                    <input type="text" id="engineerName" placeholder="Engineer name">
+                </div>
+                <div class="form-group">
+                    <label for="engineerTimezone">Timezone:</label>
+                    <select id="engineerTimezone">
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="engineerGroups">Groups:</label>
+                    <div id="engineerGroups" class="engineer-groups-select">
+                        <!-- Group checkboxes will be dynamically added here -->
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="schedule-type-header">
+                        <h4>Working Hours</h4>
+                        <select id="scheduleTypeSelector" class="schedule-type-selector">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="bulk-edit-controls">
+                        <button type="button" id="applyMondayFridayBtn" class="btn btn-secondary btn-sm">Mon-Fri 9-5</button>
+                        <button type="button" id="apply247Btn" class="btn btn-secondary btn-sm">24/7</button>
+                        <button type="button" id="applyToCopyBtn" class="btn btn-secondary btn-sm">Copy to Days...</button>
+                        <button type="button" id="copyFromScheduleBtn" class="btn btn-secondary btn-sm">Copy from Type...</button>
+                        <button type="button" id="clearAllBtn" class="btn btn-secondary btn-sm">Clear All</button>
+                    </div>
+                    <div id="scheduleInputs" class="schedule-inputs">
+                        <!-- Schedule inputs for each day -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelBtn" class="btn btn-secondary">Cancel</button>
+                <button id="saveEngineerBtn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Modal -->
+    <div id="groupModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 id="groupModalTitle">Add Group</h3>
+                <button class="modal-close group-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="groupName">Group Name:</label>
+                    <input type="text" id="groupName" placeholder="e.g., Americas Team">
+                </div>
+                <div class="form-group">
+                    <label for="groupColor">Color:</label>
+                    <input type="color" id="groupColor">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelGroupBtn" class="btn btn-secondary">Cancel</button>
+                <button id="saveGroupBtn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule Types Management Modal -->
+    <div id="scheduleTypesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Manage Schedule Types</h3>
+                <button class="modal-close schedule-types-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="section-header">
+                    <h4>Schedule Types</h4>
+                    <button id="addScheduleTypeBtn" class="btn btn-primary btn-sm">+ Add Type</button>
+                </div>
+                <div id="scheduleTypesList" class="schedule-types-list">
+                    <!-- Schedule types will be listed here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="closeScheduleTypesBtn" class="btn btn-primary">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Schedule Type Modal -->
+    <div id="scheduleTypeModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 id="scheduleTypeModalTitle">Add Schedule Type</h3>
+                <button class="modal-close schedule-type-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="scheduleTypeName">Type Name:</label>
+                    <input type="text" id="scheduleTypeName" placeholder="e.g., Weekend Coverage">
+                </div>
+                <div class="form-group">
+                    <label for="scheduleTypeColor">Color:</label>
+                    <input type="color" id="scheduleTypeColor">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelScheduleTypeBtn" class="btn btn-secondary">Cancel</button>
+                <button id="saveScheduleTypeBtn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="timezone.js"></script>
+    <script src="storage.js"></script>
+    <script src="groups.js"></script>
+    <script src="tooltip.js"></script>
+    <script src="heatmap.js"></script>
+    <script src="export.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

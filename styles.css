@@ -203,7 +203,7 @@ header p {
 /* Heatmap */
 .heatmap-container {
     margin-top: 25px;
-    overflow-x: auto;
+    overflow: hidden;
 }
 
 .heatmap {

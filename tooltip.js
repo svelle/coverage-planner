@@ -136,20 +136,30 @@ function getEngineersAtTime(day, hour, targetTimezone, scheduleType) {
             : [scheduleType];
 
         scheduleTypesToCheck.forEach(stId => {
-            const schedule = engineer.schedules[stId];
+            const schedule = engineer.schedules?.[stId] || (stId === 'regular' ? engineer.schedule : null);
             if (!schedule) return;
 
-            const workingHours = getWorkingHoursInTimezone(
-                schedule,
-                day,
-                engineer.timezone,
-                targetTimezone
-            );
+            // Check all days (current, previous, and next) in case hours shift across day boundaries
+            let isWorking = false;
 
-            // Check if working at this hour
-            const isWorking = workingHours.some(wh =>
-                wh.day === day && wh.hour === hour
-            );
+            for (let checkDay = 0; checkDay < 7; checkDay++) {
+                const workingHours = getWorkingHoursInTimezone(
+                    schedule,
+                    checkDay,
+                    engineer.timezone,
+                    targetTimezone
+                );
+
+                // Check if any converted hours match our target day/hour
+                const match = workingHours.some(wh =>
+                    wh.day === day && wh.hour === hour
+                );
+
+                if (match) {
+                    isWorking = true;
+                    break;
+                }
+            }
 
             if (isWorking) {
                 // Calculate local time for this engineer

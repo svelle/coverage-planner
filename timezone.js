@@ -164,6 +164,55 @@ function getWorkingHoursInTimezone(engineerSchedule, dayOfWeek, fromTimezone, to
     return hoursInTargetTz;
 }
 
+// Get exact working time range for a given day in target timezone (with minute precision)
+function getWorkingTimeRangeInTimezone(engineerSchedule, dayOfWeek, fromTimezone, toTimezone) {
+    const schedule = engineerSchedule[dayOfWeek];
+    if (!schedule || !schedule.working) {
+        return null;
+    }
+
+    const [startHours, startMinutes] = schedule.start.split(':').map(Number);
+    const [endHours, endMinutes] = schedule.end.split(':').map(Number);
+
+    // Convert start time
+    const startConverted = convertTimeToTimezone(
+        schedule.start,
+        dayOfWeek,
+        fromTimezone,
+        toTimezone
+    );
+
+    // Convert end time
+    // Handle overnight shifts (end time is before start time)
+    let endDayOfWeek = dayOfWeek;
+    if (endHours < startHours || (endHours === startHours && endMinutes <= startMinutes)) {
+        endDayOfWeek = (dayOfWeek + 1) % 7; // Next day
+    }
+
+    const endConverted = convertTimeToTimezone(
+        schedule.end,
+        endDayOfWeek,
+        fromTimezone,
+        toTimezone
+    );
+
+    // Parse converted times to get fractional hours (for positioning)
+    const [startH, startM] = startConverted.time.split(':').map(Number);
+    const [endH, endM] = endConverted.time.split(':').map(Number);
+
+    const startFractional = startH + (startM / 60);
+    const endFractional = endH + (endM / 60);
+
+    return {
+        startDay: startConverted.dayOfWeek,
+        endDay: endConverted.dayOfWeek,
+        startTime: startConverted.time,
+        endTime: endConverted.time,
+        startFractional: startFractional,
+        endFractional: endFractional
+    };
+}
+
 // Populate timezone selectors
 function populateTimezoneSelect(selectElement) {
     selectElement.innerHTML = '';

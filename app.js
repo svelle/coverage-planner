@@ -230,11 +230,11 @@ function renderScheduleInputs(schedule) {
             <div class="schedule-time-inputs" id="times-${dayIndex}" style="display: ${daySchedule.working ? 'grid' : 'none'}">
                 <div class="time-input-group">
                     <label for="start-${dayIndex}">Start time:</label>
-                    <input type="time" id="start-${dayIndex}" value="${daySchedule.start}">
+                    <input type="time" id="start-${dayIndex}" value="${daySchedule.start}" step="1800">
                 </div>
                 <div class="time-input-group">
                     <label for="end-${dayIndex}">End time:</label>
-                    <input type="time" id="end-${dayIndex}" value="${daySchedule.end}">
+                    <input type="time" id="end-${dayIndex}" value="${daySchedule.end}" step="1800">
                 </div>
             </div>
         `;
@@ -978,73 +978,63 @@ function renderBarChart() {
             : [scheduleType];
 
         scheduleTypesToShow.forEach(stId => {
-            const schedule = engineer.schedules?.[stId];
+            const schedule = engineer.schedules?.[stId] || (stId === 'regular' ? engineer.schedule : null);
             if (!schedule) return;
 
-            // Get working hours for this day AND the previous day (to catch overnight shifts)
-            // that extend into the selected day
-            const allHoursForDay = [];
+            // Check all 7 days to find schedules that overlap with the selected day
+            const segments = [];
 
-            // Check the selected day
-            const workingHours = getWorkingHoursInTimezone(
-                schedule,
-                dayIndex,
-                engineer.timezone,
-                timezone
-            );
+            for (let checkDay = 0; checkDay < 7; checkDay++) {
+                const timeRange = getWorkingTimeRangeInTimezone(
+                    schedule,
+                    checkDay,
+                    engineer.timezone,
+                    timezone
+                );
 
-            // Check the previous day (in case of overnight shifts)
-            const prevDayIndex = (dayIndex - 1 + 7) % 7;
-            const prevDayHours = getWorkingHoursInTimezone(
-                schedule,
-                prevDayIndex,
-                engineer.timezone,
-                timezone
-            );
+                if (!timeRange) continue;
 
-            // Add hours from selected day that match selected day
-            workingHours.forEach(wh => {
-                if (wh.day === dayIndex) {
-                    allHoursForDay.push(wh);
+                // Check if this time range overlaps with the selected day
+                // Handle overnight shifts that span multiple days
+                if (timeRange.startDay === timeRange.endDay) {
+                    // Same day shift
+                    if (timeRange.startDay === dayIndex) {
+                        segments.push({
+                            start: timeRange.startFractional,
+                            end: timeRange.endFractional,
+                            startTime: timeRange.startTime,
+                            endTime: timeRange.endTime,
+                            scheduleTypeId: stId
+                        });
+                    }
+                } else {
+                    // Overnight shift - spans two days
+                    if (timeRange.startDay === dayIndex) {
+                        // First part: from start to end of day
+                        segments.push({
+                            start: timeRange.startFractional,
+                            end: 24,
+                            startTime: timeRange.startTime,
+                            endTime: '24:00',
+                            scheduleTypeId: stId
+                        });
+                    }
+                    if (timeRange.endDay === dayIndex) {
+                        // Second part: from start of day to end
+                        segments.push({
+                            start: 0,
+                            end: timeRange.endFractional,
+                            startTime: '00:00',
+                            endTime: timeRange.endTime,
+                            scheduleTypeId: stId
+                        });
+                    }
                 }
-            });
+            }
 
-            // Add hours from previous day that spilled over into selected day
-            prevDayHours.forEach(wh => {
-                if (wh.day === dayIndex) {
-                    allHoursForDay.push(wh);
-                }
-            });
-
-            if (allHoursForDay.length === 0) return;
+            if (segments.length === 0) return;
 
             hasAnyHours = true;
-
-            // Use allHoursForDay instead of todayHours
-            const todayHours = allHoursForDay;
-
-            // Group consecutive hours into segments
-            const segments = [];
-            let currentSegment = null;
-
-            todayHours.sort((a, b) => a.hour - b.hour).forEach(wh => {
-                if (!currentSegment || wh.hour !== currentSegment.end) {
-                    if (currentSegment) {
-                        segments.push(currentSegment);
-                    }
-                    currentSegment = {
-                        start: wh.hour,
-                        end: wh.hour + 1,
-                        scheduleTypeId: stId
-                    };
-                } else {
-                    currentSegment.end = wh.hour + 1;
-                }
-            });
-
-            if (currentSegment) {
-                segments.push(currentSegment);
-            }
 
             // Render segments
             segments.forEach(seg => {
@@ -1058,13 +1048,12 @@ function renderBarChart() {
                 segment.style.left = `${(seg.start / 24) * 100}%`;
                 segment.style.width = `${((seg.end - seg.start) / 24) * 100}%`;
 
-                const startTime = String(seg.start).padStart(2, '0') + ':00';
-                const endTime = String(seg.end).padStart(2, '0') + ':00';
-                segment.title = `${name}: ${startTime} - ${endTime}`;
+                segment.title = `${name}: ${seg.startTime} - ${seg.endTime}`;
 
                 // Only show text if segment is wide enough
-                if (seg.end - seg.start >= 2) {
-                    segment.textContent = `${startTime}-${endTime}`;
+                const duration = seg.end - seg.start;
+                if (duration >= 2) {
+                    segment.textContent = `${seg.startTime}-${seg.endTime}`;
                 }
 
                 track.appendChild(segment);

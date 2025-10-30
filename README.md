@@ -2,6 +2,10 @@
 
 A simple web application for planning and visualizing technical support team coverage across multiple timezones.
 
+All data is local, nothing gets sent anywhere.
+
+https://svelle.github.io/coverage-planner/
+
 ## Features
 
 - **Engineer Management**: Add, edit, and remove engineers with custom schedules

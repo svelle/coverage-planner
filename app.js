@@ -32,6 +32,13 @@ function init() {
 
     // Restore collapse states from localStorage
     restoreCollapsedStates();
+
+    // Initialize bar chart (default to Monday)
+    document.getElementById('barChartDaySelect').value = '1';
+    renderBarChart();
+
+    // Load data from URL if shared link
+    loadFromUrl();
 }
 
 // Set up all event listeners
@@ -59,8 +66,14 @@ function setupEventListeners() {
     document.getElementById('saveGroupBtn').addEventListener('click', saveGroup);
 
     // Timezone and schedule type selectors
-    document.getElementById('timezoneSelect').addEventListener('change', renderHeatmap);
-    document.getElementById('scheduleTypeSelect').addEventListener('change', renderHeatmap);
+    document.getElementById('timezoneSelect').addEventListener('change', () => {
+        renderHeatmap();
+        renderBarChart();
+    });
+    document.getElementById('scheduleTypeSelect').addEventListener('change', () => {
+        renderHeatmap();
+        renderBarChart();
+    });
     document.getElementById('scheduleTypeSelector').addEventListener('change', handleScheduleTypeChange);
 
     // Bulk edit buttons
@@ -83,10 +96,16 @@ function setupEventListeners() {
     document.getElementById('exportJsonBtn').addEventListener('click', handleExportJson);
     document.getElementById('exportCsvBtn').addEventListener('click', handleExportCsv);
     document.getElementById('importJsonInput').addEventListener('change', handleImportJson);
+    document.getElementById('shareBtn').addEventListener('click', generateShareUrl);
 
     // Collapse buttons
     document.getElementById('collapseGroupsBtn').addEventListener('click', () => toggleCollapse('groups'));
     document.getElementById('collapseEngineersBtn').addEventListener('click', () => toggleCollapse('engineers'));
+
+    // Bar chart
+    document.getElementById('barChartDaySelect').addEventListener('change', renderBarChart);
+    document.getElementById('prevDayBtn').addEventListener('click', navigatePrevDay);
+    document.getElementById('nextDayBtn').addEventListener('click', navigateNextDay);
 
     // Close modals on background click
     document.getElementById('engineerModal').addEventListener('click', (e) => {
@@ -896,6 +915,195 @@ function restoreCollapsedStates() {
         document.getElementById('engineersContent').classList.add('collapsed');
         document.getElementById('collapseEngineersBtn').classList.add('collapsed');
     }
+}
+
+// Bar Chart Functions
+function renderBarChart() {
+    const container = document.getElementById('barChartContainer');
+    const dayIndex = parseInt(document.getElementById('barChartDaySelect').value);
+
+    // Use the heatmap's timezone and schedule type
+    const timezone = document.getElementById('timezoneSelect').value;
+    const scheduleType = document.getElementById('scheduleTypeSelect').value;
+
+    container.innerHTML = '';
+
+    if (engineers.length === 0) {
+        container.innerHTML = '<div class="bar-chart-empty">No engineers added yet</div>';
+        return;
+    }
+
+    // Create timeline (hours 0-23)
+    const timeline = document.createElement('div');
+    timeline.className = 'bar-chart-timeline';
+    for (let hour = 0; hour < 24; hour++) {
+        const label = document.createElement('div');
+        label.className = 'bar-chart-hour-label';
+        label.textContent = String(hour).padStart(2, '0');
+        timeline.appendChild(label);
+    }
+    container.appendChild(timeline);
+
+    // Create rows container
+    const rowsContainer = document.createElement('div');
+    rowsContainer.className = 'bar-chart-rows';
+
+    // Filter engineers by active group
+    const filteredEngineers = engineers.filter(eng => {
+        if (activeGroupFilter && (!eng.groups || !eng.groups.includes(activeGroupFilter))) {
+            return false;
+        }
+        return true;
+    });
+
+    if (filteredEngineers.length === 0) {
+        container.innerHTML += '<div class="bar-chart-empty">No engineers match the current filter</div>';
+        return;
+    }
+
+    // For each engineer, create a row with their schedule bars
+    filteredEngineers.forEach(engineer => {
+        // Track (24-hour timeline)
+        const track = document.createElement('div');
+        track.className = 'bar-chart-track';
+
+        let hasAnyHours = false;
+
+        // Determine which schedule types to show
+        const scheduleTypesToShow = scheduleType === 'all'
+            ? scheduleTypes.map(st => st.id)
+            : [scheduleType];
+
+        scheduleTypesToShow.forEach(stId => {
+            const schedule = engineer.schedules?.[stId];
+            if (!schedule) return;
+
+            // Get working hours for this day AND the previous day (to catch overnight shifts)
+            // that extend into the selected day
+            const allHoursForDay = [];
+
+            // Check the selected day
+            const workingHours = getWorkingHoursInTimezone(
+                schedule,
+                dayIndex,
+                engineer.timezone,
+                timezone
+            );
+
+            // Check the previous day (in case of overnight shifts)
+            const prevDayIndex = (dayIndex - 1 + 7) % 7;
+            const prevDayHours = getWorkingHoursInTimezone(
+                schedule,
+                prevDayIndex,
+                engineer.timezone,
+                timezone
+            );
+
+            // Add hours from selected day that match selected day
+            workingHours.forEach(wh => {
+                if (wh.day === dayIndex) {
+                    allHoursForDay.push(wh);
+                }
+            });
+
+            // Add hours from previous day that spilled over into selected day
+            prevDayHours.forEach(wh => {
+                if (wh.day === dayIndex) {
+                    allHoursForDay.push(wh);
+                }
+            });
+
+            if (allHoursForDay.length === 0) return;
+
+            hasAnyHours = true;
+
+            // Use allHoursForDay instead of todayHours
+            const todayHours = allHoursForDay;
+
+            // Group consecutive hours into segments
+            const segments = [];
+            let currentSegment = null;
+
+            todayHours.sort((a, b) => a.hour - b.hour).forEach(wh => {
+                if (!currentSegment || wh.hour !== currentSegment.end) {
+                    if (currentSegment) {
+                        segments.push(currentSegment);
+                    }
+                    currentSegment = {
+                        start: wh.hour,
+                        end: wh.hour + 1,
+                        scheduleTypeId: stId
+                    };
+                } else {
+                    currentSegment.end = wh.hour + 1;
+                }
+            });
+
+            if (currentSegment) {
+                segments.push(currentSegment);
+            }
+
+            // Render segments
+            segments.forEach(seg => {
+                const schedTypeInfo = scheduleTypes.find(st => st.id === seg.scheduleTypeId);
+                const color = schedTypeInfo ? schedTypeInfo.color : '#4caf50';
+                const name = schedTypeInfo ? schedTypeInfo.name : seg.scheduleTypeId;
+
+                const segment = document.createElement('div');
+                segment.className = 'bar-chart-segment';
+                segment.style.backgroundColor = color;
+                segment.style.left = `${(seg.start / 24) * 100}%`;
+                segment.style.width = `${((seg.end - seg.start) / 24) * 100}%`;
+
+                const startTime = String(seg.start).padStart(2, '0') + ':00';
+                const endTime = String(seg.end).padStart(2, '0') + ':00';
+                segment.title = `${name}: ${startTime} - ${endTime}`;
+
+                // Only show text if segment is wide enough
+                if (seg.end - seg.start >= 2) {
+                    segment.textContent = `${startTime}-${endTime}`;
+                }
+
+                track.appendChild(segment);
+            });
+        });
+
+        // Only add the row if the engineer has working hours this day
+        if (hasAnyHours) {
+            const row = document.createElement('div');
+            row.className = 'bar-chart-row';
+
+            // Engineer name label
+            const label = document.createElement('div');
+            label.className = 'bar-chart-label';
+            label.textContent = engineer.name;
+            label.title = engineer.name;
+            row.appendChild(label);
+
+            row.appendChild(track);
+            rowsContainer.appendChild(row);
+        }
+    });
+
+    container.appendChild(rowsContainer);
+}
+
+// Navigate to previous day
+function navigatePrevDay() {
+    const daySelect = document.getElementById('barChartDaySelect');
+    let currentDay = parseInt(daySelect.value);
+    currentDay = (currentDay - 1 + 7) % 7; // Wrap around: Sunday (0) -> Saturday (6)
+    daySelect.value = currentDay;
+    renderBarChart();
+}
+
+// Navigate to next day
+function navigateNextDay() {
+    const daySelect = document.getElementById('barChartDaySelect');
+    let currentDay = parseInt(daySelect.value);
+    currentDay = (currentDay + 1) % 7; // Wrap around: Saturday (6) -> Sunday (0)
+    daySelect.value = currentDay;
+    renderBarChart();
 }
 
 // Initialize when DOM is ready

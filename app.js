@@ -101,6 +101,9 @@ function setupEventListeners() {
     document.getElementById('loadHashBtn').addEventListener('click', loadFromHash);
     document.getElementById('closeShareBtn').addEventListener('click', closeShareModal);
 
+    // Reset data button
+    document.getElementById('resetDataBtn').addEventListener('click', handleResetData);
+
     // Collapse buttons
     document.getElementById('collapseGroupsBtn').addEventListener('click', () => toggleCollapse('groups'));
     document.getElementById('collapseEngineersBtn').addEventListener('click', () => toggleCollapse('engineers'));
@@ -136,6 +139,9 @@ function setupEventListeners() {
     });
 }
 
+// Track the original timezone when modal opens
+let originalTimezone = null;
+
 // Open the engineer modal for adding/editing
 function openEngineerModal(engineerId = null) {
     const modal = document.getElementById('engineerModal');
@@ -158,6 +164,7 @@ function openEngineerModal(engineerId = null) {
         modalTitle.textContent = 'Edit Engineer';
         nameInput.value = engineer.name;
         timezoneSelect.value = engineer.timezone;
+        originalTimezone = engineer.timezone; // Store original timezone
 
         // Render groups
         renderEngineerGroupsSelect(engineer.groups || []);
@@ -170,6 +177,7 @@ function openEngineerModal(engineerId = null) {
         modalTitle.textContent = 'Add Engineer';
         nameInput.value = '';
         timezoneSelect.value = timezoneSelect.options[0].value;
+        originalTimezone = timezoneSelect.value; // Store original timezone
 
         // Render groups
         renderEngineerGroupsSelect([]);
@@ -177,7 +185,102 @@ function openEngineerModal(engineerId = null) {
         renderScheduleInputs(getDefaultSchedule());
     }
 
+    // Set up timezone change listener
+    setupTimezoneChangeListener();
+
     modal.classList.add('show');
+}
+
+// Set up listener for timezone changes in the modal
+function setupTimezoneChangeListener() {
+    const timezoneSelect = document.getElementById('engineerTimezone');
+
+    // Remove any existing listener
+    const newSelect = timezoneSelect.cloneNode(true);
+    timezoneSelect.parentNode.replaceChild(newSelect, timezoneSelect);
+
+    // Add new listener
+    newSelect.addEventListener('change', handleTimezoneChange);
+}
+
+// Handle timezone change in the modal
+function handleTimezoneChange() {
+    const timezoneSelect = document.getElementById('engineerTimezone');
+    const newTimezone = timezoneSelect.value;
+
+    if (!originalTimezone || originalTimezone === newTimezone) {
+        return;
+    }
+
+    // Get current schedule from inputs
+    const currentSchedule = getCurrentScheduleFromInputs();
+
+    // Convert schedule to new timezone
+    const convertedSchedule = convertScheduleToTimezone(currentSchedule, originalTimezone, newTimezone);
+
+    // Update original timezone to the new one
+    originalTimezone = newTimezone;
+
+    // Re-render with converted schedule
+    renderScheduleInputs(convertedSchedule);
+}
+
+// Get current schedule from the input fields
+function getCurrentScheduleFromInputs() {
+    const schedule = {};
+    for (let day = 0; day < 7; day++) {
+        const working = document.getElementById(`working-${day}`).checked;
+        const start = document.getElementById(`start-${day}`).value;
+        const end = document.getElementById(`end-${day}`).value;
+        schedule[day] = { working, start, end };
+    }
+    return schedule;
+}
+
+// Convert a schedule from one timezone to another
+function convertScheduleToTimezone(schedule, fromTimezone, toTimezone) {
+    const newSchedule = {};
+
+    // Initialize all days as not working
+    for (let day = 0; day < 7; day++) {
+        newSchedule[day] = { working: false, start: '09:00', end: '17:00' };
+    }
+
+    // Convert each working day
+    for (let day = 0; day < 7; day++) {
+        if (!schedule[day] || !schedule[day].working) {
+            continue;
+        }
+
+        const timeRange = getWorkingTimeRangeInTimezone(schedule, day, fromTimezone, toTimezone);
+        if (!timeRange) continue;
+
+        // Handle same-day and overnight shifts
+        if (timeRange.startDay === timeRange.endDay) {
+            // Same day - just set the converted times
+            newSchedule[timeRange.startDay] = {
+                working: true,
+                start: timeRange.startTime,
+                end: timeRange.endTime
+            };
+        } else {
+            // Overnight shift - split into two days
+            // First day: from start to midnight
+            newSchedule[timeRange.startDay] = {
+                working: true,
+                start: timeRange.startTime,
+                end: '00:00'
+            };
+            // Second day: from midnight to end
+            newSchedule[timeRange.endDay] = {
+                working: true,
+                start: '00:00',
+                end: timeRange.endTime
+            };
+        }
+    }
+
+    return newSchedule;
 }
 
 // Close the engineer modal
@@ -500,6 +603,45 @@ function handleImportJson(event) {
 
     // Reset file input
     event.target.value = '';
+}
+
+// Handle reset all data
+function handleResetData() {
+    const confirmed = confirm('Are you sure you want to reset ALL data? This will delete all engineers, groups, and schedule types. This action cannot be undone.');
+
+    if (!confirmed) {
+        return;
+    }
+
+    // Double confirmation for safety
+    const doubleConfirm = confirm('This is your final warning. All data will be permanently deleted. Continue?');
+
+    if (!doubleConfirm) {
+        return;
+    }
+
+    // Clear all localStorage data
+    localStorage.removeItem('engineers');
+    localStorage.removeItem('groups');
+    localStorage.removeItem('scheduleTypes');
+    localStorage.removeItem('defaultScheduleType');
+    localStorage.removeItem('groupsCollapsed');
+    localStorage.removeItem('engineersCollapsed');
+
+    // Reset in-memory data
+    engineers = [];
+    scheduleTypes = loadScheduleTypes(); // This will recreate default schedule types
+    initGroups(); // Reinitialize groups
+
+    // Re-render everything
+    renderGroupsManager();
+    renderGroupFilters();
+    renderEngineersList();
+    populateScheduleTypeSelectors();
+    renderHeatmap();
+    renderBarChart();
+
+    alert('All data has been reset successfully.');
 }
 
 // Populate schedule type selectors
